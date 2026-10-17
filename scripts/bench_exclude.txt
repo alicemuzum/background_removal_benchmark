@@ -1,0 +1,35 @@
+# Images whose white-bg matte is wrong (checked by eye). One id per line; '#' starts a comment.
+# White / clear product parts treated as background:
+78362aac  # white binder
+81f3c7a4  # label sheet, interior speckled
+c182d91e  # white bottle
+90a7cb98  # white changing-pad cover
+39fc7c20  # bag with white label
+e279836d  # notebook, white pattern punched out
+08fd004e  # diaper packs
+27f6c48f  # white cup + toilet brush
+30861770  # glass globe sconce
+235731a8  # white dropper bottle
+561a7b80  # wallet with white box
+ef0ec217  # foil dispenser
+02f56c51  # white side table
+7d269dc8  # white caps
+557d2377  # clear food containers
+5cb40a5b  # white power strip
+f7136043  # white paper box
+97fbf8de  # glass sconce
+b9e8d9de  # white pump bottle
+# Text / diagram content the overlay detector missed:
+759f38f9  # canopy infographic with callouts
+9ba501f2  # nutrition-label text page
+45a9e6db  # binder clips + size text
+45b679f7  # bag with dimension text + phone
+fb4954fa  # sofa with human scale silhouette
+88db1f47  # shelf with inset callout
+# Second pass (replacements):
+251bca59  # white chair
+f556f1e7  # white wipes pack
+81a233d1  # sofa with human scale silhouette
+1b4008a3  # storage cube with dimension text
+3c9153d1  # supplement-facts text page
+c19d2c2e  # oil bottle with infographic icons
