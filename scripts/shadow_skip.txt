@@ -1,0 +1,4 @@
+# Ids where remove_shadows would take real product (checked by eye). One id per line; '#' starts a comment.
+3ad053e9  # silver ring band looks like a shadow under the stones
+62bdce59  # earring's silver bezel
+a3d885dc  # bit of the faucet handle
