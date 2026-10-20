@@ -33,6 +33,13 @@ def score_one(pred, gt):
     return dict(mae=err.mean(), iou=(p & g).sum() / union if union else 1.0, edge_mae=err[edge].mean())
 
 
+def read_times(path):
+    """id -> seconds. Tolerates a missing header row (left by runs that were killed early)."""
+    t = pd.read_csv(path, header=None, names=["id", "seconds"], dtype=str)
+    t = t[t.id != "id"]
+    return pd.to_numeric(t.set_index("id").seconds).groupby(level=0).last()
+
+
 def boot_ci(x, rng):
     x = np.asarray(x, float)
     means = x[rng.integers(0, len(x), (N_BOOT, len(x)))].mean(axis=1)
@@ -50,7 +57,7 @@ def main():
         for model_dir in sorted(Path("data/preds", set_name).iterdir()):
             if not model_dir.is_dir():
                 continue
-            times = pd.read_csv(model_dir / "times.csv", dtype={"id": str}).set_index("id").seconds
+            times = read_times(model_dir / "times.csv")
             for r in manifest.itertuples():
                 pred_path = model_dir / f"{r.id}.png"
                 if not pred_path.exists():
@@ -72,7 +79,7 @@ def main():
         for m in ["mae", "iou", "edge_mae"]:
             lo, hi = boot_ci(g[m], rng)
             s[m], s[f"{m}_lo"], s[f"{m}_hi"] = g[m].mean(), lo, hi
-        s["seconds"] = g.seconds.mean()
+        s["seconds"], s["n_timed"] = g.seconds.mean(), int(g.seconds.notna().sum())
         summary.append(s)
     summary = pd.DataFrame(summary).sort_values(["set", "mae"])
     summary.to_csv(out / "summary.csv", index=False)
@@ -82,7 +89,7 @@ def main():
         for s in g.itertuples():
             print(f"  {s.model:24s} n={s.n:3d}  MAE {s.mae:.4f} [{s.mae_lo:.4f}-{s.mae_hi:.4f}]  "
                   f"IoU {s.iou:.3f} [{s.iou_lo:.3f}-{s.iou_hi:.3f}]  "
-                  f"edge MAE {s.edge_mae:.3f} [{s.edge_mae_lo:.3f}-{s.edge_mae_hi:.3f}]  {s.seconds:.2f}s/img")
+                  f"edge MAE {s.edge_mae:.3f} [{s.edge_mae_lo:.3f}-{s.edge_mae_hi:.3f}]  {s.seconds:.2f}s/img (n={s.n_timed})")
 
 
 if __name__ == "__main__":
