@@ -63,7 +63,7 @@ replacements were clean).
 
 **Remaining / TODO.** White and clear products are among the hardest real-world cases, and the
 benchmark now under-represents them. Plan: bring them back as a separate "hard" subset with
-hand-corrected mattes (see `TODO.md`).
+hand-corrected mattes.
 
 ---
 
