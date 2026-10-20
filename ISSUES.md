@@ -151,16 +151,52 @@ also stays, because reopening those erased product (see above).
 
 ---
 
-## 6. Background seen through holes in the product counts as product (open)
+## 6. Background seen through holes in the product counted as product
 
-**Symptom.** White background visible *through* a product (inside a ring, through a bag's handle
-loop) is kept as foreground, so it shows up white in composites.
+**Symptom.** White background visible *through* a product (between table and chair legs, inside
+rings, through a bag's handle loop, between clock petals) was kept as foreground, so it showed up
+white in composites. It also penalised models that cut those gaps out correctly.
+
+**How found.** First noticed while checking the shadow fix. Its size only became clear in the
+first scoring run: two of u2net's eight worst images on the white-background set were side tables
+where u2net had correctly cut around the legs but the reference matte filled the space between
+them. Across the bench, 36 of the 200 mattes had enclosed white areas making up 10% or more of the
+product.
 
 **Cause.** `alpha_from_white_bg` treats white regions not connected to the image border as part
-of the product. That's deliberate: it keeps white labels and white printed areas solid. But a
-hole through the product is also white and also not connected to the border.
+of the product. That's deliberate: it keeps white labels and white printed areas solid. But a gap
+through the product is also white and also not connected to the border, often because a faint
+floor line or the product's own frame closes it off.
 
-**Status.** Open. Found while checking the shadow fix. Telling a hole from a white label needs
-more than colour (both are pure white and fully enclosed). Options: a per-image list of hole ids
-fixed by hand, or a rule based on shape, such as holes being bounded on all sides by the same
-part.
+**Fix.** `remove_holes` in `scripts/make_bench_set.py`, applied to the saved matte after selection.
+- *Default ("auto")*: open an enclosed white region only if it is pure white like the outer
+  background (95th percentile within 6 of white) and plain (almost nothing inside it; a label has
+  letters, which show up as holes within the white region). This was right everywhere it fired,
+  but too strict: JPEG noise and stray specks make most real gaps fail it.
+- *Per-image overrides in `scripts/holes.txt`*, from reviewing all 63 images with significant
+  enclosed white: 28 set to "all" (every enclosed white region is a gap: furniture, rings, mesh,
+  wheels, a buckle, a hinge's screw holes) and 1 set to "none" (a drawing of a white TV stand,
+  where the rule would take its white front).
+- `refine_edge_alpha` now treats opened holes as outside, so the edges around them get the same
+  white-fringe correction as the outer outline.
+
+**Verified.** 35 images had holes opened (28 by override, 7 by the automatic rule). Each was
+checked in its composite: texture shows through every gap, and no product surface was lost. The
+bench selection is unchanged.
+
+**Remaining.** Images not in the reviewed 63 (enclosed white under 2% of the product) rely on the
+automatic rule alone. Small gaps there may still be filled in.
+
+---
+
+## 7. BiRefNet ran out of memory on CPU
+
+**Symptom.** The model run was killed by the kernel's out-of-memory killer while running
+`birefnet-general` (12.4 GB resident on a 15 GB machine).
+
+**Cause.** ONNX Runtime's CPU memory arena holds on to peak allocations. BiRefNet runs at
+1024×1024, and with the arena on it peaked at 12.7 GB for a single image.
+
+**Fix.** `scripts/run_models.py` creates rembg sessions with `enable_cpu_mem_arena = False`.
+BiRefNet now peaks at 8.3 GB at the same speed (about 21 s per image on this CPU, so about
+70 minutes per 200-image set). Heavy jobs (easyocr, other models) shouldn't run alongside it.

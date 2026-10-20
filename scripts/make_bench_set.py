@@ -4,7 +4,8 @@ Usage: python scripts/make_bench_set.py [--src data/sources] [--out data/bench] 
 At most --cap images are kept per product_type (from data/image_categories.csv,
 built by scripts/image_categories.py). Ids listed in scripts/bench_exclude.txt
 (mattes found wrong on review) are skipped. Soft shadows and floor reflections are
-removed from the saved mattes (remove_shadows), except for ids in scripts/shadow_skip.txt. Images with text overlays (marketing copy,
+removed from the saved mattes (remove_shadows), except for ids in scripts/shadow_skip.txt, and
+background seen through the product is opened (remove_holes, per-id overrides in scripts/holes.txt). Images with text overlays (marketing copy,
 dimension labels) are skipped using easyocr's text detector. Writes <out>/images/<id>.jpg, <out>/alpha/<id>.png (8-bit matte) and <out>/manifest.csv.
 """
 import argparse
@@ -30,6 +31,10 @@ SHADOW_GRAD = 6.0    # ...and smooth (no edge to stop the background spreading i
 SHADOW_MAX_FRAC = 0.15  # a region this big relative to the product is product, not shadow
 SHADOW_MAX_DEPTH = 25   # px from the outside; shadows are thin
 SHADOW_MIN_BELOW = 0.6  # share of the region that must have solid product directly above
+# Holes (remove_holes): enclosed white regions opened by default only if they look like plain background
+HOLE_PURE = 6        # 95th percentile of distance-from-white must be at most this
+HOLE_MAX_INNER = 0.03  # and the region may contain almost nothing (letters on a label do)
+HOLE_MIN_AREA = 15
 
 
 def alpha_from_white_bg(bgr, tol=WHITE_TOL):
@@ -51,7 +56,7 @@ def alpha_from_white_bg(bgr, tol=WHITE_TOL):
     return alpha
 
 
-def refine_edge_alpha(bgr, alpha, edge_px=EDGE_PX, min_contrast=MIN_CONTRAST, speck_frac=SPECK_FRAC):
+def refine_edge_alpha(bgr, alpha, edge_px=EDGE_PX, min_contrast=MIN_CONTRAST, speck_frac=SPECK_FRAC, holes=None):
     """Re-estimate alpha along the product's outer outline as the blend between
     white and the local product colour, so composites get no white fringe.
 
@@ -63,7 +68,8 @@ def refine_edge_alpha(bgr, alpha, edge_px=EDGE_PX, min_contrast=MIN_CONTRAST, sp
 
     Only the outer silhouette (holes filled) is touched, so white areas inside the
     product - labels, gaps that leak to the outside through a thin channel - keep
-    their alpha. Afterwards, tiny pale blobs left floating (JPEG noise) are dropped.
+    their alpha. `holes` (from remove_holes) count as outside, so their edges are
+    refined too. Afterwards, tiny pale blobs left floating (JPEG noise) are dropped.
 
     Applied only to the saved matte, after selection: the sanity checks run on
     the hard-edged alpha so this doesn't change which images pass.
@@ -74,6 +80,8 @@ def refine_edge_alpha(bgr, alpha, edge_px=EDGE_PX, min_contrast=MIN_CONTRAST, sp
     filled = hard.copy()
     cnts, _ = cv2.findContours(hard, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     cv2.drawContours(filled, cnts, -1, 1, -1)
+    if holes is not None:
+        filled[holes] = 0
 
     k = np.ones((2 * edge_px + 1, 2 * edge_px + 1), np.uint8)
     band = cv2.dilate(filled, k).astype(bool) & cv2.dilate(1 - filled, k).astype(bool)
@@ -148,6 +156,43 @@ def remove_shadows(bgr, alpha, pale=SHADOW_PALE, max_sat=SHADOW_SAT, max_grad=SH
     out = alpha.copy()
     out[removed] = 0.0
     return out, removed
+
+
+def remove_holes(bgr, alpha, mode="auto", pure=HOLE_PURE, max_inner=HOLE_MAX_INNER, min_area=HOLE_MIN_AREA):
+    """Set alpha to 0 for background seen through the product (between legs, inside rings).
+
+    alpha_from_white_bg keeps white regions that don't touch the image border as
+    product, which is right for white labels but wrong for gaps through the product.
+    mode "auto" opens a region only if it is pure white (like the outer background)
+    and plain (no letters or marks inside, which a label has). That's reliable where
+    it fires but misses gaps with JPEG noise or stray specks, so scripts/holes.txt
+    sets mode "all" (open every enclosed white region) or "none" per image after review.
+    Returns (alpha, opened mask).
+    """
+    hard = alpha >= 0.5
+    opened = np.zeros_like(hard)
+    if mode == "none":
+        return alpha, opened
+    d = 255 - bgr.min(axis=2).astype(np.int32)
+    white = (d < WHITE_TOL) & hard
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(white.astype(np.uint8), connectivity=4)
+    for c in range(1, n):
+        area = stats[c, cv2.CC_STAT_AREA]
+        if area < min_area:
+            continue
+        region = labels == c
+        if mode == "auto":
+            x, y, w, h = stats[c, :4]
+            sub = region[y:y + h, x:x + w].astype(np.uint8)
+            filled = sub.copy()
+            cnts, _ = cv2.findContours(sub, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            cv2.drawContours(filled, cnts, -1, 1, -1)
+            if np.percentile(d[region], 95) > pure or filled.sum() - sub.sum() > max_inner * area + 2:
+                continue
+        opened |= region
+    out = alpha.copy()
+    out[opened] = 0.0
+    return out, opened
 
 
 def keep_main_parts(alpha, rel_min=0.10, max_dropped=0.15):
@@ -244,6 +289,7 @@ def main():
     ap.add_argument("--exclude", default="scripts/bench_exclude.txt", help="ids with known-bad mattes")
     ap.add_argument("--shadow-skip", default="scripts/shadow_skip.txt",
                     help="ids where remove_shadows takes real product (checked by eye)")
+    ap.add_argument("--holes", default="scripts/holes.txt", help="per-id remove_holes mode (all/none)")
     args = ap.parse_args()
 
     def read_ids(path):
@@ -252,6 +298,8 @@ def main():
 
     exclude = read_ids(args.exclude)
     shadow_skip = read_ids(args.shadow_skip)
+    with open(args.holes) as f:
+        hole_mode = dict(line.split("#")[0].split() for line in f if line.split("#")[0].strip())
 
     with open(args.categories, newline="") as f:
         category = {r["file"]: r["product_type"] or "UNKNOWN" for r in csv.DictReader(f)}
@@ -279,7 +327,8 @@ def main():
         per_cat[cat] += 1
         if p.stem not in shadow_skip:
             alpha, _ = remove_shadows(img, alpha)
-        kept.append((p, cat, img, refine_edge_alpha(img, alpha)))
+        alpha, holes = remove_holes(img, alpha, hole_mode.get(p.stem, "auto"))
+        kept.append((p, cat, img, refine_edge_alpha(img, alpha, holes=holes)))
         if len(kept) >= args.n:
             break
     print(f"checked {checked}, kept {len(kept)} across {len(per_cat)} product types (cap {args.cap}), "

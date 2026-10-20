@@ -1,0 +1,34 @@
+# Enclosed white regions in the matte: background seen through the product, or white product
+# (labels, white surfaces)? remove_holes opens regions that are pure, plain white by default.
+# Per-image overrides, checked by eye:  <id> all|none  # note
+#   all  = every enclosed white region in this image is background seen through a gap
+#   none = open nothing (the rule would take white product)
+b14b7e1d none  # white TV stand drawing: its front face is product
+7aa081e2 all   # side table, gaps between legs
+54a56745 all   # side table
+b4a9b4b0 all   # side table
+49ab690b all   # coffee table
+8628036d all   # patio table
+2d6e81c6 all   # bench, gap under the seat
+15827da3 all   # bar stools
+36460ffa all   # office chair, gaps at the armrests
+9ca108b9 all   # folding chair
+381ca18b all   # counter chair
+a0661236 all   # dining chair
+91ee6dc0 all   # drying rack mesh
+7a7c047c all   # ironing board legs
+14a9c7a5 all   # wall shelves, triangles between brackets
+bd236b6c all   # round wire-mesh shelf
+ef9be0f9 all   # bed frame, between slats
+e18fddf9 all   # bicycle planter wheels
+d772912b all   # folding wagon frame
+9a6c67e4 all   # clock, gaps between petals
+570bc323 all   # switch plate openings
+0174668b all   # hinge screw holes
+267a4f25 all   # belt buckle
+04e21e7a all   # tote, gap under the handles
+edaee5e6 all   # backpack strap loop
+5748468c all   # hangers
+d5bffcca all   # hoop earring
+cb70e7a4 all   # ring interior
+74046fe3 all   # ring interiors
