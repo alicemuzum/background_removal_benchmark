@@ -2,3 +2,5 @@
 data/
 __pycache__/
 *.pyc
+CLAUDE.md
+.claude/
